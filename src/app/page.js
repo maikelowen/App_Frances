@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import RoleplayModal from '@/components/RoleplayModal';
 
 const CATEGORIES = [
   "🔀 Mix Variado",
@@ -18,6 +19,7 @@ export default function Home() {
   const [selectedCategory, setSelectedCategory] = useState(CATEGORIES[0]);
   const [loadingAi, setLoadingAi] = useState(false);
   const [seenPhrases, setSeenPhrases] = useState([]);
+  const [isRoleplayOpen, setIsRoleplayOpen] = useState(false);
   
   // Estados de interacción
   const [userAnswer, setUserAnswer] = useState('');
@@ -25,7 +27,6 @@ export default function Home() {
   const [spResult, setSpResult] = useState('');
   const [spFeedback, setSpFeedback] = useState(null);
 
-  // 1. Cargar historial y mazo guardado al abrir la aplicación
   useEffect(() => {
     const savedDeck = localStorage.getItem('paris_deck');
     const savedSeen = localStorage.getItem('paris_seen_phrases');
@@ -50,18 +51,15 @@ export default function Home() {
       }
     }
 
-    // Si no hay mazo en localStorage, genera un mazo Mix inicial automáticamente
     generar10Tarjetas(CATEGORIES[0]);
   }, []);
 
-  // 2. Sincronizar el mazo actual con localStorage
   useEffect(() => {
     if (deck.length > 0) {
       localStorage.setItem('paris_deck', JSON.stringify(deck));
     }
   }, [deck]);
 
-  // Reproducción de voz nativa en francés
   const hablarFrances = (text) => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
@@ -75,7 +73,6 @@ export default function Home() {
     }
   };
 
-  // Generación de tarjetas + Deduplicación local
   const generar10Tarjetas = async (catTarget) => {
     setLoadingAi(true);
     setSelectedCategory(catTarget);
@@ -94,19 +91,13 @@ export default function Home() {
       const data = await res.json();
 
       if (data.cards && data.cards.length > 0) {
-        // Normalizamos el historial completo para comparar sin sensibilidad a mayúsculas
         const historico = new Set(seenPhrases.map(f => f.toLowerCase().trim()));
-        
-        // Filtro absoluto en cliente
         const tarjetasUnicas = data.cards.filter(card => !historico.has(card.fr.toLowerCase().trim()));
-
-        // Si se filtró alguna por repetida, mostramos las únicas. Si todas eran repetidas, mantenemos el lote recibido
         const tarjetasFinales = tarjetasUnicas.length > 0 ? tarjetasUnicas : data.cards;
 
         setDeck(tarjetasFinales);
         setCurrentIndex(0);
 
-        // Guardamos las nuevas en el historial general sin duplicados
         const nuevasFrases = tarjetasFinales.map(c => c.fr);
         const historialActualizado = Array.from(new Set([...seenPhrases, ...nuevasFrases]));
         
@@ -154,7 +145,7 @@ export default function Home() {
   const startListening = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("El reconocimiento de voz requiere Chrome en Android.");
+      alert("El reconocimiento de voz requiere Chrome.");
       return;
     }
     const recognition = new SpeechRecognition();
@@ -185,15 +176,23 @@ export default function Home() {
       <div className="w-full max-w-sm flex flex-col gap-4 my-auto">
         
         {/* Header */}
-        <header className="text-center">
-          <div className="inline-flex items-center gap-1.5 bg-sky-100 text-sky-800 font-bold px-3 py-1 rounded-full text-xs mb-1">
-            <span>🇫🇷</span> París • Navidad
+        <header className="text-center flex flex-col items-center gap-1">
+          <div className="inline-flex items-center gap-1.5 bg-sky-100 text-sky-800 font-bold px-3 py-1 rounded-full text-xs">
+            <span>🇫🇷</span> París A2 • Navidad
           </div>
           <p className="text-xs text-slate-500 font-medium">Práctica en familia con Mai</p>
         </header>
 
-        {/* Carrusel de Categorías (Burbujas / Chips) */}
-        <div className="flex gap-2 overflow-x-auto no-scrollbar py-1.5 px-1 -mx-1 touch-pan-x">
+        {/* BOTÓN ROLEPLAY PROMINENTE */}
+        <button 
+          onClick={() => setIsRoleplayOpen(true)}
+          className="w-full bg-green-500 hover:bg-slate-800 active:scale-[0.98] text-white font-bold py-3 px-4 rounded-2xl text-xs shadow-lg shadow-slate-900/10 flex items-center justify-center gap-2 transition">
+          <span className="text-sm">💬</span>
+          <span>Simulador de Conversación (Roleplay)</span>
+        </button>
+
+        {/* Carrusel de Categorías */}
+        <div className="flex gap-2 overflow-x-auto no-scrollbar py-1 px-1 -mx-1 touch-pan-x">
           {CATEGORIES.map((cat, i) => {
             const isSelected = selectedCategory === cat;
             return (
@@ -232,7 +231,7 @@ export default function Home() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
               </svg>
-              <span className="text-xs font-semibold text-sky-700">Generando 10 frases sin repetir...</span>
+              <span className="text-xs font-semibold text-sky-700">Generando 10 frases A2...</span>
             </div>
           )}
 
@@ -304,7 +303,7 @@ export default function Home() {
       </div>
 
       <footer className="text-[10px] text-slate-400 font-medium py-2 flex items-center gap-3">
-        <span> Français • París Diciembre 2026</span>
+        <span>A2 Français • París Diciembre 2026</span>
         {seenPhrases.length > 0 && (
           <button 
             onClick={() => {
@@ -318,6 +317,12 @@ export default function Home() {
           </button>
         )}
       </footer>
+
+      {/* MODAL DE ROLEPLAY */}
+      <RoleplayModal 
+        isOpen={isRoleplayOpen} 
+        onClose={() => setIsRoleplayOpen(false)} 
+      />
 
     </main>
   );
