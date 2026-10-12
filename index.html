@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Francés para París - App Completa</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --accent: #38bdf8;
+      --text: #ffffff;
+      --text-muted: #94a3b8;
+      --btn-bg: #0284c7;
+      --btn-hover: #0369a1;
+      --success: #22c55e;
+      --error: #ef4444;
+    }
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 16px; box-sizing: border-box; }
+    .container { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 16px; }
+    
+    .nav-tabs { display: flex; gap: 8px; margin-bottom: 4px; }
+    .tab-btn { flex: 1; background: #1e293b; border: none; color: var(--text-muted); padding: 10px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.85rem; }
+    .tab-btn.active { background: var(--btn-bg); color: white; }
+
+    .card { background: var(--card-bg); padding: 24px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.4); display: flex; flex-direction: column; gap: 16px; }
+    .category-tag { align-self: center; background: rgba(56, 189, 248, 0.15); color: var(--accent); font-size: 0.75rem; font-weight: 700; padding: 4px 12px; border-radius: 20px; text-transform: uppercase; }
+    
+    .fr { font-size: 1.3rem; font-weight: 700; color: var(--text); text-align: center; line-height: 1.3; }
+    .es { font-size: 1rem; color: var(--text-muted); text-align: center; }
+    
+    input[type="text"] { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #475569; background: #0f172a; color: white; font-size: 1rem; box-sizing: border-box; text-align: center; }
+    
+    button.action-btn { background: var(--btn-bg); color: white; border: none; padding: 14px; border-radius: 12px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background 0.2s; width: 100%; }
+    button.action-btn:active { background: var(--btn-hover); }
+    
+    .feedback { font-weight: bold; text-align: center; padding: 10px; border-radius: 8px; font-size: 0.95rem; }
+    .feedback.success { background: rgba(34, 197, 94, 0.15); color: var(--success); }
+    .feedback.error { background: rgba(239, 68, 68, 0.15); color: var(--error); }
+    
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="nav-tabs">
+      <button class="tab-btn active" onclick="switchTab('flashcards')">📖 Tarjetas</button>
+      <button class="tab-btn" onclick="switchTab('exercise')">✍️ Ejercicio Escrito</button>
+      <button class="tab-btn" onclick="switchTab('speech')">🎤 Hablar y Corregir</button>
+    </div>
+
+    <!-- MÓDULO 1: TARJETAS -->
+    <div id="tab-flashcards" class="card">
+      <div class="category-tag" id="fcCategory">Familia & Navidad</div>
+      <div class="es" id="fcEs">¡Feliz Navidad! Estoy encantado de conoceros.</div>
+      <div class="fr" id="fcFr">Joyeux Noël! Je suis ravi de vous rencontrer.</div>
+      <button class="action-btn" onclick="hablarFrances(document.getElementById('fcFr').innerText)">🔊 Escuchar Pronunciación</button>
+      <div style="display: flex; gap: 10px; margin-top: 8px;">
+        <button class="action-btn" style="background:#334155;" onclick="prevCard()">⬅️ Anterior</button>
+        <button class="action-btn" style="background:#334155;" onclick="nextCard()">Siguiente ➔</button>
+      </div>
+    </div>
+
+    <!-- MÓDULO 2: EJERCICIO ESCRITO -->
+    <div id="tab-exercise" class="card hidden">
+      <div class="category-tag">Traducción Activa</div>
+      <div class="es" id="exEs">Escribe esta frase en francés:</div>
+      <div id="exPrompt" style="font-size: 1.1rem; font-weight: bold; text-align: center; color: var(--accent);">¡Feliz Navidad! Estoy encantado de conoceros.</div>
+      
+      <input type="text" id="userAnswer" placeholder="Escribe en francés aquí..." autocomplete="off">
+      <button class="action-btn" onclick="checkAnswer()">Comprobar Respuesta</button>
+      <div id="exFeedback" class="feedback hidden"></div>
+      <button class="action-btn" id="nextExBtn" style="background:#334155;" onclick="loadNextExercise()" class="hidden">Siguiente Pregunta ➔</button>
+    </div>
+
+    <!-- MÓDULO 3: PRÁCTICA ORAL -->
+    <div id="tab-speech" class="card hidden">
+      <div class="category-tag">Entrenamiento de Voz</div>
+      <div class="es">Pronuncia en voz alta esta frase:</div>
+      <div id="spTarget" style="font-size: 1.3rem; font-weight: bold; text-align: center; color: var(--accent);">Joyeux Noël!</div>
+      
+      <button class="action-btn" onclick="startSpeechRecognition()" id="micBtn">🎙️ Pulsar y Hablar</button>
+      <div id="spResult" style="text-align: center; color: var(--text-muted); font-style: italic;">Escuchando...</div>
+      <div id="spFeedback" class="feedback hidden"></div>
+    </div>
+  </div>
+
+  <script>
+    // Mazo rico enfocado en el contexto real del viaje
+    const deck = [
+      { category: "Navidad", fr: "Joyeux Noël! Je suis ravi de vous rencontrer.", es: "¡Feliz Navidad! Estoy encantado de conoceros." },
+      { category: "La Bebé (Mai)", fr: "Mai est un bébé très sage et souriant.", es: "Mai es una bebé muy formal y sonriente." },
+      { category: "Cenas", fr: "C'est délicieux, compliments au chef!", es: "¡Está delicioso, felicidades al chef!" },
+      { category: "Familia", fr: "Comment va ta journée?", es: "¿Cómo va tu día?" },
+      { category: "Desplazamientos", fr: "Où se trouve la station de métro?", es: "¿Dónde está la estación de metro?" }
+    ];
+
+    let currentIndex = 0;
+    let currentExIndex = 0;
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.card').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      
+      if(tabName === 'flashcards') {
+        document.getElementById('tab-flashcards').classList.remove('hidden');
+        event.target.classList.add('active');
+        updateCard();
+      } else if(tabName === 'exercise') {
+        document.getElementById('tab-exercise').classList.remove('hidden');
+        event.target.classList.add('active');
+        loadExercise();
+      } else if(tabName === 'speech') {
+        document.getElementById('tab-speech').classList.remove('hidden');
+        event.target.classList.add('active');
+        loadSpeechTask();
+      }
+    }
+
+    // --- Lógica Flashcards ---
+    function updateCard() {
+      const item = deck[currentIndex];
+      document.getElementById('fcCategory').innerText = item.category;
+      document.getElementById('fcEs').innerText = item.es;
+      document.getElementById('fcFr').innerText = item.fr;
+    }
+    function nextCard() { currentIndex = (currentIndex + 1) % deck.length; updateCard(); }
+    function prevCard() { currentIndex = (currentIndex - 1 + deck.length) % deck.length; updateCard(); }
+
+    // --- Lógica Ejercicio Escrito ---
+    function loadExercise() {
+      const item = deck[currentExIndex];
+      document.getElementById('exPrompt').innerText = item.es;
+      document.getElementById('userAnswer').value = '';
+      document.getElementById('exFeedback').classList.add('hidden');
+    }
+
+    function checkAnswer() {
+      const userText = document.getElementById('userAnswer').value.trim().toLowerCase();
+      const correctText = deck[currentExIndex].fr.trim().toLowerCase();
+      
+      // Limpieza básica de puntuación para evitar fallos tontos por tildes o signos
+      const cleanUser = userText.replace(/[!?,.]/g, '');
+      const cleanCorrect = correctText.replace(/[!?,.]/g, '');
+
+      const feedbackEl = document.getElementById('exFeedback');
+      feedbackEl.classList.remove('hidden');
+
+      if(cleanUser === cleanCorrect) {
+        feedbackEl.className = "feedback success";
+        feedbackEl.innerText = "¡Excelente! Respuesta correcta 🎉";
+        setTimeout(() => {
+          currentExIndex = (currentExIndex + 1) % deck.length;
+          loadExercise();
+        }, 1500);
+      } else {
+        feedbackEl.className = "feedback error";
+        feedbackEl.innerText = `Incorrecto. Lo correcto es: "${deck[currentExIndex].fr}"`;
+      }
+    }
+
+    // --- Lógica Práctica Oral (Speech Recognition) ---
+    function loadSpeechTask() {
+      const item = deck[currentExIndex];
+      document.getElementById('spTarget').innerText = item.fr;
+      document.getElementById('spResult').innerText = "Pulsa el micrófono y di la frase en francés";
+      document.getElementById('spFeedback').classList.add('hidden');
+    }
+
+    function startSpeechRecognition() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert("Tu navegador no soporta reconocimiento de voz nativo. Usa Chrome en Android.");
+        return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'fr-FR';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      document.getElementById('spResult').innerText = "Escuchando... Habla ahora.";
+
+      recognition.onresult = (event) => {
+        const spokenText = event.results[0][0].transcript.trim().toLowerCase();
+        const targetText = document.getElementById('spTarget').innerText.trim().toLowerCase();
+        
+        document.getElementById('spResult').innerText = `Has dicho: "${spokenText}"`;
+        
+        const feedbackEl = document.getElementById('spFeedback');
+        feedbackEl.classList.remove('hidden');
+
+        // Comparación flexible de pronunciación
+        if(spokenText.includes(targetText.replace(/[!?,.]/g, '').substring(0, 10))) {
+          feedbackEl.className = "feedback success";
+          feedbackEl.innerText = "¡Muy bien pronunciado! Acento correcto 🌟";
+        } else {
+          feedbackEl.className = "feedback error";
+          feedbackEl.innerText = `Inténtalo de nuevo. Se esperaba algo más parecido a la frase original.`;
+        }
+      };
+
+      recognition.onerror = (event) => {
+        document.getElementById('spResult').innerText = "No se ha entendido bien. Vuelve a probar.";
+      };
+
+      recognition.start();
+    }
+
+    // --- Motor de Voz (TTS) ---
+    function hablarFrances(texto) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(texto);
+        utterance.lang = 'fr-FR';
+        utterance.rate = 0.85;
+        const voces = window.speechSynthesis.getVoices();
+        const vozFrancesa = voces.find(v => v.lang.includes('fr'));
+        if (vozFrancesa) utterance.voice = vozFrancesa;
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+    }
+  </script>
+
+</body>
+</html>
