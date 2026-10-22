@@ -2,54 +2,81 @@ import Groq from "groq-sdk";
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-const OPEN_SCENARIOS = {
-  "🎄 Cenas y Navidad en familia": {
-    theme: "Encuentro navideño o reunión familiar en París con la familia de Bao-Chau.",
-    guidance: "Sé un familiar cercano o amigo en un ambiente festivo. Habla de la cena, el viaje o la bebé Mai."
+const SCENARIOS_WITH_MISSIONS = {
+  "🥖 Boulangerie & Cafés": {
+    role: "Un panadero o camarero parisino amable pero con prisa.",
+    missions: [
+      "Pedir expresamente al menos 2 productos en francés (ej. 'Je voudrais dos croissants et un café').",
+      "Preguntar el precio o si aceptan tarjeta (ej. 'C'est combien ?' o 'Vous acceptez la carte ?').",
+      "Despedirse usando cortesía explícita (ej. 'Merci beaucoup, bonne journée !')."
+    ]
   },
-  "🥖 Boulangerie & Cafés de París": {
-    theme: "Interacción en un establecimiento de comida, cafetería o comercio parisino.",
-    guidance: "Sé el camarero, vendedor o un cliente. Inicia la interacción de forma natural y ofrece opciones."
+  "🎄 Cenas y Navidad": {
+    role: "Un familiar parisino cercano en la cena de Nochebuena.",
+    missions: [
+      "Mencionar explícitamente el viaje desde España o la llegada a París.",
+      "Mencionar o responder activamente sobre la bebé Mai o Bao-Chau.",
+      "Proponer o responder a un brindis de Navidad (ej. 'Santé !' o 'Joyeux Noël !')."
+    ]
   },
-  "👶 Paseando con la bebé Mai": {
-    theme: "Situación al aire libre, parque, tienda o paseo por París llevando a la bebé Mai.",
-    guidance: "Sé un transeúnte, otro padre/madre en el parque o un vecino. Comenta sobre Mai, el clima o París."
+  "👶 En el parque con Mai": {
+    role: "Un vecino o padre/madre parisino en el Jardin du Luxembourg.",
+    missions: [
+      "Decir el nombre 'Mai' y mencionar cuántos meses o edad tiene.",
+      "Comentar algo sobre el clima o el día en París (ej. 'Il fait beau', 'Il fait froid').",
+      "Pedir una recomendación de un sitio cercano para pasear o tomar algo."
+    ]
   },
-  "🚇 Moverse por París": {
-    theme: "Desplazamientos, transporte público, taxis o caminar por las calles de París.",
-    guidance: "Sé un parisino local o trabajador del transporte. Ayuda con direcciones, billetes o el carrito."
-  },
-  "👋 Presentaciones con la familia de Bao-Chau": {
-    theme: "Conocer o interactuar con tíos, primos o amigos de Bao-Chau.",
-    guidance: "Sé un familiar de Bao-Chau. Muestra hospitalidad y haz preguntas sobre la estancia o la familia."
+  "🚇 Metro y Transporte": {
+    role: "Un empleado de la estación de metro o un parisino local.",
+    missions: [
+      "Preguntar por una línea o dirección a un sitio específico.",
+      "Preguntar sobre el cochecito de bebé o ascensor (ej. 'poussette', 'ascenseur').",
+      "Preguntar por el precio o compra de billetes ('ticket', 'pass')."
+    ]
   }
 };
 
 export async function POST(request) {
   try {
-    const { scenario, history = [], userMessage } = await request.json();
+    const { scenario, history = [], userMessage, currentMissionsState = [false, false, false] } = await request.json();
 
-    const currentScenario = OPEN_SCENARIOS[scenario] || {
-      theme: "Conversación cotidiana en París.",
-      guidance: "Sé un parisino amable y abierto a cualquier tema A2."
+    const scenarioData = SCENARIOS_WITH_MISSIONS[scenario] || {
+      role: "Un ciudadano parisino.",
+      missions: [
+        "Presentarte en francés.",
+        "Responder a las preguntas.",
+        "Despedirte amablemente."
+      ]
     };
 
-    const systemPrompt = `Eres un interlocutor francés amable que ayuda a Miguel a practicar su francés A2 en situaciones reales.
+    const systemPrompt = `Eres el evaluador riguroso y personaje de un simulador de francés A2.
 
-CONTEXTO:
-- Escenario: ${currentScenario.theme}
-- Orientación: ${currentScenario.guidance}
-- Usuario: Miguel (estudiante A2). Viaja a París en Navidad con Bao-Chau y su bebé Mai.
+PERSONAJE: ${scenarioData.role}
+USUARIO: Miguel (estudiante español A2). Viaja a París en Navidad con Bao-Chau y su bebé Mai.
 
-REGLAS OBLIGATORIAS DE INTERACCIÓN:
-1. Mantén la respuesta corta y accesible en francés A2 (2 o 3 frases como máximo).
-2. OBLIGATORIO: Termina SIEMPRE tu mensaje con una pregunta interesante o una propuesta concreta para motivar a Miguel a responder y mantener la conversación fluida.
-3. Reacciona con empatía a lo que te diga Miguel antes de hacer tu siguiente pregunta.
-4. Devuelve ÚNICAMENTE un objeto JSON válido con esta estructura:
+CRITERIOS ESTRICTOS DE LAS MISIONES:
+1. "${scenarioData.missions[0]}" -> Estado actual: ${currentMissionsState[0] ? "COMPLETADA" : "PENDIENTE"}
+2. "${scenarioData.missions[1]}" -> Estado actual: ${currentMissionsState[1] ? "COMPLETADA" : "PENDIENTE"}
+3. "${scenarioData.missions[2]}" -> Estado actual: ${currentMissionsState[2] ? "COMPLETADA" : "PENDIENTE"}
+
+REGLAS DE EVALUACIÓN MUY ESTRICTAS:
+1. Revisa el último mensaje enviado por Miguel.
+2. SÓLO marca como true una misión PENDIENTE si Miguel ha dicho la frase o intención EXACTA solicitada en francés A2 comprensible.
+3. Si solo ha saludado o dicho algo vago (ej. "Bonjour", "Oui", "D'accord"), NO valides ninguna misión. Sé exigentemente justo.
+4. MANTÉN SIEMPRE en true las misiones que ya estuvieran completadas.
+5. Calificación (stars): 
+   - Pon null si aún hay misiones pendientes.
+   - Si se completan las 3 misiones, asigna un número de 1 a 5 según la precisión gramatical de Miguel en sus mensajes.
+
+FORMATO DE RESPUESTA JSON OBLIGATORIO:
 {
-  "replyFr": "Tu frase en francés terminada SIEMPRE en una pregunta",
-  "translationEs": "Traducción natural al español de todo tu mensaje",
-  "feedback": "Si Miguel cometió un fallo gramatical o de expresión en su mensaje anterior, indícalo brevemente en español. Si es correcto o es el inicio de la escena, pon null."
+  "replyFr": "Tu respuesta en francés continuando el papel",
+  "translationEs": "Traducción exacta al español",
+  "completedMissions": [boolean, boolean, boolean],
+  "feedback": "Si Miguel cometió un fallo de expresión o gramática, indícalo brevemente. Si no, null.",
+  "stars": null o número (1-5),
+  "summaryAdvice": "Consejo breve solo si se completaron las 3 misiones, de lo contrario null"
 }`;
 
     const formattedHistory = history.map((msg) => ({
@@ -67,7 +94,7 @@ REGLAS OBLIGATORIAS DE INTERACCIÓN:
     } else {
       messages.push({
         role: "user",
-        content: "Salúdame, preséntate brevemente dentro del contexto y hazme una primera pregunta para empezar a hablar."
+        content: "Salúdame e inicia la escena."
       });
     }
 
@@ -78,10 +105,22 @@ REGLAS OBLIGATORIAS DE INTERACCIÓN:
     });
 
     const data = JSON.parse(completion.choices[0].message.content);
-    return Response.json(data);
+
+    // Fusión segura: nunca desmarcar lo que ya estaba completado
+    const mergedMissions = [
+      currentMissionsState[0] || (data.completedMissions ? data.completedMissions[0] : false),
+      currentMissionsState[1] || (data.completedMissions ? data.completedMissions[1] : false),
+      currentMissionsState[2] || (data.completedMissions ? data.completedMissions[2] : false),
+    ];
+
+    return Response.json({
+      ...data,
+      completedMissions: mergedMissions,
+      missionsList: scenarioData.missions
+    });
 
   } catch (error) {
-    console.error("Error en el chat de roleplay:", error);
-    return Response.json({ error: "Error procesando el chat" }, { status: 500 });
+    console.error("Error en la API de Roleplay:", error);
+    return Response.json({ error: "Error en el servidor" }, { status: 500 });
   }
 }

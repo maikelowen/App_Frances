@@ -1,4 +1,5 @@
 import "./globals.css";
+import { ClerkProvider } from '@clerk/nextjs';
 
 export const metadata = {
   title: "París A2 - Francés en Familia",
@@ -13,14 +14,12 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="es">
-      <head>
-        <meta name="theme-color" content="#0284c7" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-      </head>
-      <body className="bg-slate-50 text-slate-800 antialiased">
-        {children}
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="es">
+        <body className="bg-slate-50 text-slate-900 antialiased">
+          {children}
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

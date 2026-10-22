@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import RoleplayModal from '@/components/RoleplayModal';
+import { useAuth, UserButton, SignInButton, SignUpButton } from "@clerk/nextjs";
 
 const CATEGORIES = [
   "🔀 Mix Variado",
@@ -14,13 +15,16 @@ const CATEGORIES = [
 ];
 
 export default function Home() {
+  const { isLoaded, isSignedIn } = useAuth();
+
+  // Estados de Flashcards y Mazo
   const [deck, setDeck] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState(CATEGORIES[0]);
   const [loadingAi, setLoadingAi] = useState(false);
   const [seenPhrases, setSeenPhrases] = useState([]);
   const [isRoleplayOpen, setIsRoleplayOpen] = useState(false);
-  
+
   // Estados de interacción
   const [userAnswer, setUserAnswer] = useState('');
   const [exFeedback, setExFeedback] = useState(null);
@@ -28,12 +32,14 @@ export default function Home() {
   const [spFeedback, setSpFeedback] = useState(null);
 
   useEffect(() => {
+    if (!isSignedIn) return; // Solo cargar mazo si está logueado
+
     const savedDeck = localStorage.getItem('paris_deck');
     const savedSeen = localStorage.getItem('paris_seen_phrases');
-    
+
     if (savedSeen) {
-      try { 
-        setSeenPhrases(JSON.parse(savedSeen)); 
+      try {
+        setSeenPhrases(JSON.parse(savedSeen));
       } catch (e) {
         console.error("Error al leer historial de visto", e);
       }
@@ -52,7 +58,7 @@ export default function Home() {
     }
 
     generar10Tarjetas(CATEGORIES[0]);
-  }, []);
+  }, [isSignedIn]);
 
   useEffect(() => {
     if (deck.length > 0) {
@@ -82,9 +88,9 @@ export default function Home() {
       const res = await fetch('/api/generar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           category: catTarget,
-          seenPhrases: seenPhrases.slice(-20) 
+          seenPhrases: seenPhrases.slice(-20)
         })
       });
 
@@ -100,7 +106,7 @@ export default function Home() {
 
         const nuevasFrases = tarjetasFinales.map(c => c.fr);
         const historialActualizado = Array.from(new Set([...seenPhrases, ...nuevasFrases]));
-        
+
         setSeenPhrases(historialActualizado);
         localStorage.setItem('paris_seen_phrases', JSON.stringify(historialActualizado));
       }
@@ -156,7 +162,7 @@ export default function Home() {
       const spoken = event.results[0][0].transcript;
       setSpResult(`Escuchado: "${spoken}"`);
       const target = deck[currentIndex].fr.toLowerCase().replace(/[!?,.]/g, '');
-      
+
       if (spoken.toLowerCase().includes(target.substring(0, 8))) {
         setSpFeedback({ success: true, msg: "¡Pronunciación genial! 🌟" });
       } else {
@@ -170,23 +176,85 @@ export default function Home() {
 
   const currentCard = deck[currentIndex] || { category: selectedCategory, fr: "Cargando...", es: "Cargando frases..." };
 
+  // 0. PANTALLA DE CARGA MIENTRAS COMPRUEBA SESIÓN
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-4 border-sky-500 border-t-transparent animate-spin" />
+      </div>
+    );
+  }
+
+  // 1. VISTA DE VISITANTE (LANDING PAGE COMERCIAL)
+  if (!isSignedIn) {
+    return (
+      <main className="min-h-screen bg-slate-950 text-white flex flex-col justify-between p-6 sm:p-12 relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_var(--tw-gradient-stops))] from-sky-900/20 via-transparent to-transparent pointer-events-none" />
+
+        <nav className="max-w-5xl w-full mx-auto flex justify-between items-center relative z-10">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">✈️</span>
+            <span className="font-bold tracking-tight text-sm sm:text-base">TravelLingo</span>
+          </div>
+          <div className="flex gap-3">
+            <SignInButton mode="modal">
+              <button className="text-xs sm:text-sm font-semibold text-slate-300 hover:text-white transition px-4 py-2">
+                Iniciar Sesión
+              </button>
+            </SignInButton>
+            <SignUpButton mode="modal">
+              <button className="text-xs sm:text-sm bg-sky-600 hover:bg-sky-500 text-white font-bold px-4 py-2 rounded-xl transition shadow-lg shadow-sky-600/20">
+                Empezar Gratis
+              </button>
+            </SignUpButton>
+          </div>
+        </nav>
+
+        <div className="max-w-3xl mx-auto text-center space-y-6 relative z-10 my-auto py-12">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-sky-500/10 border border-sky-500/20 text-sky-400 text-xs font-semibold">
+            <span>✨</span> Simulador de Inmersión Lingüística
+          </div>
+          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-tight">
+            Aprende el idioma para tu viaje real.
+          </h1>
+          <p className="text-sm sm:text-base text-slate-400 max-w-xl mx-auto">
+            Entrena la expresión escrita, pronunciación y simulaciones conversacionales adaptadas a tus misiones de viaje.
+          </p>
+          <div className="pt-4 flex justify-center">
+            <SignUpButton mode="modal">
+              <button className="bg-sky-600 hover:bg-sky-500 text-white font-bold px-8 py-3.5 rounded-2xl text-sm transition shadow-xl shadow-sky-600/30">
+                Probar Simulador Gratis ➔
+              </button>
+            </SignUpButton>
+          </div>
+        </div>
+
+        <footer className="max-w-5xl w-full mx-auto text-center text-xs text-slate-600 relative z-10">
+          © {new Date().getFullYear()} TravelLingo.
+        </footer>
+      </main>
+    );
+  }
+
+  // 2. VISTA DE USUARIO AUTENTICADO (TU APP COMPLETA DE FLASHCARDS + ROLEPLAY)
   return (
     <main className="min-h-screen bg-slate-50 text-slate-800 flex flex-col items-center justify-between p-4 selection:bg-sky-500 selection:text-white">
-      
+
       <div className="w-full max-w-sm flex flex-col gap-4 my-auto">
-        
-        {/* Header */}
-        <header className="text-center flex flex-col items-center gap-1">
-          <div className="inline-flex items-center gap-1.5 bg-sky-100 text-sky-800 font-bold px-3 py-1 rounded-full text-xs">
-            <span>🇫🇷</span> París A2 • Navidad
+
+        {/* Header con Perfil de Clerk */}
+        <header className="flex justify-between items-center p-3 bg-white rounded-2xl border border-slate-200/80 shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🇫🇷</span>
+            <h1 className="font-bold text-xs text-slate-800">Français A2</h1>
           </div>
-          <p className="text-xs text-slate-500 font-medium">Práctica en familia con Mai</p>
+          <UserButton afterSignOutUrl="/" />
         </header>
 
         {/* BOTÓN ROLEPLAY PROMINENTE */}
-        <button 
+        <button
           onClick={() => setIsRoleplayOpen(true)}
-          className="w-full bg-green-500 hover:bg-slate-800 active:scale-[0.98] text-white font-bold py-3 px-4 rounded-2xl text-xs shadow-lg shadow-slate-900/10 flex items-center justify-center gap-2 transition">
+          className="w-full bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-bold py-3.5 px-4 rounded-2xl text-xs shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2 transition">
           <span className="text-sm">💬</span>
           <span>Simulador de Conversación (Roleplay)</span>
         </button>
@@ -224,7 +292,7 @@ export default function Home() {
 
         {/* TARJETA UNIFICADA */}
         <div className="bg-white p-5 rounded-3xl shadow-xl shadow-slate-200/60 flex flex-col gap-4 border border-slate-200/80 relative overflow-hidden">
-          
+
           {loadingAi && (
             <div className="absolute inset-0 bg-white/90 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-2">
               <svg className="animate-spin h-6 w-6 text-sky-600" viewBox="0 0 24 24" fill="none">
@@ -241,13 +309,13 @@ export default function Home() {
           </div>
 
           <div className="grid grid-cols-2 gap-2.5">
-            <button 
+            <button
               onClick={() => hablarFrances(currentCard.fr)}
               className="bg-slate-100 hover:bg-slate-200 active:scale-[0.97] text-slate-700 font-semibold py-3 px-3 rounded-2xl text-xs transition border border-slate-200 flex items-center justify-center gap-1.5">
               <span className="text-sm">🔊</span> Escuchar
             </button>
 
-            <button 
+            <button
               onClick={startListening}
               className="bg-sky-600 hover:bg-sky-700 active:scale-[0.97] text-white font-semibold py-3 px-3 rounded-2xl text-xs transition shadow-md shadow-sky-600/20 flex items-center justify-center gap-1.5">
               <span className="text-sm">🎙️</span> Hablar
@@ -263,15 +331,15 @@ export default function Home() {
 
           <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
             <div className="flex gap-2">
-              <input 
-                type="text" 
+              <input
+                type="text"
                 value={userAnswer}
                 onChange={(e) => setUserAnswer(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && checkAnswer()}
                 placeholder="Escribe en francés..."
                 className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500 focus:bg-white transition"
               />
-              <button 
+              <button
                 onClick={checkAnswer}
                 className="bg-slate-800 hover:bg-slate-900 active:scale-[0.97] text-white font-semibold px-4 py-2.5 rounded-xl text-xs transition">
                 Validar
@@ -286,12 +354,12 @@ export default function Home() {
           </div>
 
           <div className="flex gap-2.5 pt-2">
-            <button 
+            <button
               onClick={prevCard}
               className="flex-1 bg-slate-100 hover:bg-slate-200 active:scale-[0.97] text-slate-700 text-xs py-3 rounded-2xl font-semibold transition border border-slate-200">
               ⬅️ Anterior
             </button>
-            <button 
+            <button
               onClick={nextCard}
               className="flex-1 bg-sky-600 hover:bg-sky-700 active:scale-[0.97] text-white text-xs py-3 rounded-2xl font-bold transition shadow-md shadow-sky-600/20">
               Siguiente ➔
@@ -303,15 +371,15 @@ export default function Home() {
       </div>
 
       <footer className="text-[10px] text-slate-400 font-medium py-2 flex items-center gap-3">
-        <span>A2 Français • París Diciembre 2026</span>
+        <span>Práctica A2 • Inmersión Lingüística</span>
         {seenPhrases.length > 0 && (
-          <button 
+          <button
             onClick={() => {
               if (confirm("¿Quieres reiniciar el historial de frases aprendidas?")) {
                 setSeenPhrases([]);
                 localStorage.removeItem('paris_seen_phrases');
               }
-            }} 
+            }}
             className="text-slate-400 underline hover:text-slate-600">
             Limpiar memoria ({seenPhrases.length})
           </button>
@@ -319,9 +387,9 @@ export default function Home() {
       </footer>
 
       {/* MODAL DE ROLEPLAY */}
-      <RoleplayModal 
-        isOpen={isRoleplayOpen} 
-        onClose={() => setIsRoleplayOpen(false)} 
+      <RoleplayModal
+        isOpen={isRoleplayOpen}
+        onClose={() => setIsRoleplayOpen(false)}
       />
 
     </main>

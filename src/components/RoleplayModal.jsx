@@ -2,30 +2,33 @@
 
 import { useState, useEffect, useRef } from 'react';
 
-const SCENARIOS = [
-  "🎄 Cenas y Navidad en familia",
-  "🥖 Boulangerie & Cafés de París",
-  "👶 Paseando con la bebé Mai",
-  "🚇 Moverse por París",
-  "👋 Presentaciones con la familia de Bao-Chau"
+const SCENARIO_NAMES = [
+  "🥖 Boulangerie & Cafés",
+  "🎄 Cenas y Navidad",
+  "👶 En el parque con Mai",
+  "🚇 Metro y Transporte"
 ];
 
 export default function RoleplayModal({ isOpen, onClose }) {
-  const [activeScenario, setActiveScenario] = useState(SCENARIOS[0]);
+  const [activeScenario, setActiveScenario] = useState(SCENARIO_NAMES[0]);
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [listening, setListening] = useState(false);
+  
+  // Estado de Misiones y Gamificación
+  const [missions, setMissions] = useState([]);
+  const [completedMissions, setCompletedMissions] = useState([false, false, false]);
+  const [showSummary, setShowSummary] = useState(false);
+
   const messagesEndRef = useRef(null);
 
-  // Iniciar la conversación llamando dinámicamente a la IA
   useEffect(() => {
     if (isOpen) {
-      iniciarEscenarioIA(activeScenario);
+      iniciarEscenario(activeScenario);
     }
   }, [isOpen, activeScenario]);
 
-  // Scroll automático
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
@@ -40,35 +43,36 @@ export default function RoleplayModal({ isOpen, onClose }) {
     }
   };
 
-  const iniciarEscenarioIA = async (scenarioTitle) => {
+  const iniciarEscenario = async (scenarioName) => {
     setMessages([]);
     setLoading(true);
+    setShowSummary(false);
+    setCompletedMissions([false, false, false]);
 
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          scenario: scenarioTitle,
-          history: [],
-          userMessage: ""
-        })
+        body: JSON.stringify({ scenario: scenarioName, history: [], userMessage: "" })
       });
 
       const data = await res.json();
 
       if (data.replyFr) {
-        const initialAiMsg = {
+        setMissions(data.missionsList || []);
+        if (data.completedMissions) setCompletedMissions(data.completedMissions);
+
+        const initialMsg = {
           sender: 'ai',
           text: data.replyFr,
           translation: data.translationEs,
           feedback: null
         };
-        setMessages([initialAiMsg]);
+        setMessages([initialMsg]);
         hablarFrances(data.replyFr);
       }
-    } catch (error) {
-      console.error("Error al iniciar escenario con IA:", error);
+    } catch (err) {
+      console.error("Error al iniciar escenario:", err);
     } finally {
       setLoading(false);
     }
@@ -80,7 +84,7 @@ export default function RoleplayModal({ isOpen, onClose }) {
 
     const userMsg = { sender: 'user', text: textToSend };
     const newHistory = [...messages, userMsg];
-    
+
     setMessages(newHistory);
     setInputMessage('');
     setLoading(true);
@@ -99,6 +103,8 @@ export default function RoleplayModal({ isOpen, onClose }) {
       const data = await res.json();
 
       if (data.replyFr) {
+        if (data.completedMissions) setCompletedMissions(data.completedMissions);
+
         const aiMsg = {
           sender: 'ai',
           text: data.replyFr,
@@ -108,8 +114,8 @@ export default function RoleplayModal({ isOpen, onClose }) {
         setMessages((prev) => [...prev, aiMsg]);
         hablarFrances(data.replyFr);
       }
-    } catch (error) {
-      console.error("Error al enviar mensaje:", error);
+    } catch (err) {
+      console.error("Error al enviar mensaje:", err);
     } finally {
       setLoading(false);
     }
@@ -118,7 +124,7 @@ export default function RoleplayModal({ isOpen, onClose }) {
   const startListening = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("El reconocimiento por voz requiere Chrome o navegador compatible.");
+      alert("Tu navegador no soporta reconocimiento de voz nativo.");
       return;
     }
 
@@ -137,17 +143,19 @@ export default function RoleplayModal({ isOpen, onClose }) {
     recognition.start();
   };
 
+  const totalCompleted = completedMissions.filter(Boolean).length;
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-slate-50 w-full max-w-md h-[90vh] sm:h-[650px] sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden border border-slate-200 rounded-t-3xl">
+    <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="bg-slate-50 w-full max-w-md h-[92vh] sm:h-[680px] sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden border border-slate-200 rounded-t-3xl">
         
         {/* Header Modal */}
         <div className="bg-white px-4 py-3 border-b border-slate-200 flex justify-between items-center">
           <div>
-            <h3 className="font-bold text-slate-800 text-sm">Simulador de Conversación</h3>
-            <p className="text-[10px] text-slate-500">IA Generativa en Vivo • Contexto Familiar</p>
+            <h3 className="font-bold text-slate-800 text-sm">Roleplay de Inmersión A2</h3>
+            <p className="text-[10px] font-semibold text-sky-600">Misiones Activas: {totalCompleted} / 3 completadas</p>
           </div>
           <button 
             onClick={onClose}
@@ -157,38 +165,57 @@ export default function RoleplayModal({ isOpen, onClose }) {
         </div>
 
         {/* Selector de Escenarios */}
-        <div className="flex gap-2 p-2 bg-white border-b border-slate-100 overflow-x-auto no-scrollbar">
-          {SCENARIOS.map((sc, i) => (
+        <div className="flex gap-2 p-2 bg-slate-100 border-b border-slate-200 overflow-x-auto no-scrollbar">
+          {SCENARIO_NAMES.map((sc, i) => (
             <button
               key={i}
               disabled={loading}
               onClick={() => setActiveScenario(sc)}
               className={`px-3 py-1.5 rounded-full text-[11px] font-semibold whitespace-nowrap transition ${
                 activeScenario === sc
-                  ? 'bg-sky-600 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-50'
+                  ? 'bg-slate-900 text-white shadow-sm'
+                  : 'bg-white text-slate-600 hover:bg-slate-200 border border-slate-200'
               }`}>
               {sc}
             </button>
           ))}
         </div>
 
-        {/* Mensajes del Chat */}
+        {/* TARJETA DE MISIONES (Gamificación) */}
+        <div className="bg-sky-50 border-b border-sky-100 p-3">
+          <div className="text-[11px] font-bold text-sky-900 mb-1 flex items-center gap-1">
+            <span>🎯</span> Misiones del escenario:
+          </div>
+          <div className="flex flex-col gap-1">
+            {missions.map((m, idx) => (
+              <div key={idx} className="flex items-center gap-2 text-[11px]">
+                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold ${
+                  completedMissions[idx] ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'
+                }`}>
+                  {completedMissions[idx] ? '✓' : idx + 1}
+                </span>
+                <span className={completedMissions[idx] ? 'line-through text-slate-400 font-medium' : 'text-slate-700 font-medium'}>
+                  {m}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Chat / Historial */}
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
           {messages.map((msg, index) => {
             const isAi = msg.sender === 'ai';
             return (
               <div key={index} className={`flex flex-col ${isAi ? 'items-start' : 'items-end'}`}>
                 
-                {/* Feedback previo de corrección */}
                 {msg.feedback && (
-                  <div className="mb-1 text-[11px] bg-amber-50 text-amber-800 border border-amber-200 rounded-xl p-2 max-w-[85%] leading-tight">
+                  <div className="mb-1 text-[11px] bg-amber-50 text-amber-900 border border-amber-200 rounded-xl p-2 max-w-[85%] leading-tight">
                     💡 <strong>Sugerencia:</strong> {msg.feedback}
                   </div>
                 )}
 
-                {/* Burbuja de Texto */}
-                <div className={`p-3 rounded-2xl max-w-[85%] text-xs leading-relaxed shadow-sm relative group ${
+                <div className={`p-3 rounded-2xl max-w-[85%] text-xs leading-relaxed shadow-sm relative ${
                   isAi 
                     ? 'bg-white text-slate-800 border border-slate-200/80 rounded-tl-none' 
                     : 'bg-sky-600 text-white rounded-tr-none'
@@ -215,13 +242,13 @@ export default function RoleplayModal({ isOpen, onClose }) {
 
           {loading && (
             <div className="flex items-center gap-2 text-slate-400 text-xs italic bg-white p-2.5 rounded-2xl border border-slate-200/80 w-fit">
-              <span className="animate-pulse">La IA está pensando la respuesta...</span>
+              <span className="animate-pulse">La IA está evaluando tu respuesta y misiones...</span>
             </div>
           )}
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Campo de Entrada e Interacción */}
+        {/* Input Bar */}
         <div className="p-3 bg-white border-t border-slate-200 flex items-center gap-2">
           <button 
             onClick={startListening}
@@ -240,7 +267,7 @@ export default function RoleplayModal({ isOpen, onClose }) {
             onChange={(e) => setInputMessage(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
             disabled={loading}
-            placeholder={listening ? "Escuchando en francés..." : "Responde en francés..."}
+            placeholder={listening ? "Escuchando..." : "Responde en francés..."}
             className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:border-sky-500 focus:bg-white transition disabled:opacity-50"
           />
 
