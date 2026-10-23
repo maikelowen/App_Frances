@@ -1,101 +1,71 @@
+import { requireUser, missingProfile } from "@/lib/requireUser";
+import { LANGUAGES } from "@/lib/languages";
 import Groq from "groq-sdk";
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-const SCENARIOS_WITH_MISSIONS = {
-  "🥖 Boulangerie & Cafés": {
-    role: "Un panadero o camarero parisino amable pero con prisa.",
-    missions: [
-      "Pedir expresamente al menos 2 productos en francés (ej. 'Je voudrais dos croissants et un café').",
-      "Preguntar el precio o si aceptan tarjeta (ej. 'C'est combien ?' o 'Vous acceptez la carte ?').",
-      "Despedirse usando cortesía explícita (ej. 'Merci beaucoup, bonne journée !')."
-    ]
-  },
-  "🎄 Cenas y Navidad": {
-    role: "Un familiar parisino cercano en la cena de Nochebuena.",
-    missions: [
-      "Mencionar explícitamente el viaje desde España o la llegada a París.",
-      "Mencionar o responder activamente sobre la bebé Mai o Bao-Chau.",
-      "Proponer o responder a un brindis de Navidad (ej. 'Santé !' o 'Joyeux Noël !')."
-    ]
-  },
-  "👶 En el parque con Mai": {
-    role: "Un vecino o padre/madre parisino en el Jardin du Luxembourg.",
-    missions: [
-      "Decir el nombre 'Mai' y mencionar cuántos meses o edad tiene.",
-      "Comentar algo sobre el clima o el día en París (ej. 'Il fait beau', 'Il fait froid').",
-      "Pedir una recomendación de un sitio cercano para pasear o tomar algo."
-    ]
-  },
-  "🚇 Metro y Transporte": {
-    role: "Un empleado de la estación de metro o un parisino local.",
-    missions: [
-      "Preguntar por una línea o dirección a un sitio específico.",
-      "Preguntar sobre el cochecito de bebé o ascensor (ej. 'poussette', 'ascenseur').",
-      "Preguntar por el precio o compra de billetes ('ticket', 'pass')."
-    ]
-  }
-};
+const MAX_HISTORY = 20;
+const MAX_MESSAGE_LENGTH = 1000;
 
 export async function POST(request) {
+  const { user, profile, unauthorized } = await requireUser();
+  if (unauthorized) return unauthorized;
+  if (!profile) return missingProfile();
+
   try {
-    const { scenario, history = [], userMessage, currentMissionsState = [false, false, false] } = await request.json();
+    const { scenarioIndex = 0, history = [], userMessage, currentMissionsState = [false, false, false] } = await request.json();
 
-    const scenarioData = SCENARIOS_WITH_MISSIONS[scenario] || {
-      role: "Un ciudadano parisino.",
-      missions: [
-        "Presentarte en francés.",
-        "Responder a las preguntas.",
-        "Despedirte amablemente."
-      ]
-    };
+    const scenario = profile.scenarios[Number(scenarioIndex)] ?? profile.scenarios[0];
+    const lang = LANGUAGES[profile.language];
+    const done = [0, 1, 2].map((i) => currentMissionsState[i] === true);
+    const studentName = user.firstName || "el estudiante";
 
-    const systemPrompt = `Eres el evaluador riguroso y personaje de un simulador de francés A2.
+    const systemPrompt = `Eres el evaluador riguroso y personaje de un simulador de conversación en ${lang.name}, nivel ${profile.level}.
 
-PERSONAJE: ${scenarioData.role}
-USUARIO: Miguel (estudiante español A2). Viaja a París en Navidad con Bao-Chau y su bebé Mai.
+PERSONAJE: ${scenario.role}
+ESTUDIANTE: ${studentName}, hispanohablante, nivel ${profile.level} de ${lang.name}.
+- Objetivo: ${profile.goal}
+- Contexto: ${profile.context || "(sin más contexto)"}
+
+Habla SIEMPRE en ${lang.name}, con frases adecuadas al nivel ${profile.level}. Usa el contexto del estudiante para que la escena sea realista.
 
 CRITERIOS ESTRICTOS DE LAS MISIONES:
-1. "${scenarioData.missions[0]}" -> Estado actual: ${currentMissionsState[0] ? "COMPLETADA" : "PENDIENTE"}
-2. "${scenarioData.missions[1]}" -> Estado actual: ${currentMissionsState[1] ? "COMPLETADA" : "PENDIENTE"}
-3. "${scenarioData.missions[2]}" -> Estado actual: ${currentMissionsState[2] ? "COMPLETADA" : "PENDIENTE"}
+1. "${scenario.missions[0]}" -> Estado actual: ${done[0] ? "COMPLETADA" : "PENDIENTE"}
+2. "${scenario.missions[1]}" -> Estado actual: ${done[1] ? "COMPLETADA" : "PENDIENTE"}
+3. "${scenario.missions[2]}" -> Estado actual: ${done[2] ? "COMPLETADA" : "PENDIENTE"}
 
 REGLAS DE EVALUACIÓN MUY ESTRICTAS:
-1. Revisa el último mensaje enviado por Miguel.
-2. SÓLO marca como true una misión PENDIENTE si Miguel ha dicho la frase o intención EXACTA solicitada en francés A2 comprensible.
-3. Si solo ha saludado o dicho algo vago (ej. "Bonjour", "Oui", "D'accord"), NO valides ninguna misión. Sé exigentemente justo.
+1. Revisa el último mensaje enviado por el estudiante.
+2. SÓLO marca como true una misión PENDIENTE si el estudiante ha expresado la frase o intención solicitada en ${lang.name} comprensible.
+3. Si solo ha saludado o dicho algo vago (ej. un simple "hola", "sí", "vale"), NO valides ninguna misión. Sé exigentemente justo.
 4. MANTÉN SIEMPRE en true las misiones que ya estuvieran completadas.
-5. Calificación (stars): 
+5. Calificación (stars):
    - Pon null si aún hay misiones pendientes.
-   - Si se completan las 3 misiones, asigna un número de 1 a 5 según la precisión gramatical de Miguel en sus mensajes.
+   - Si se completan las 3 misiones, asigna un número de 1 a 5 según la precisión gramatical del estudiante.
 
 FORMATO DE RESPUESTA JSON OBLIGATORIO:
 {
-  "replyFr": "Tu respuesta en francés continuando el papel",
-  "translationEs": "Traducción exacta al español",
+  "reply": "Tu respuesta en ${lang.name} continuando el papel",
+  "translation": "Traducción exacta al español",
   "completedMissions": [boolean, boolean, boolean],
-  "feedback": "Si Miguel cometió un fallo de expresión o gramática, indícalo brevemente. Si no, null.",
+  "feedback": "Si el estudiante cometió un fallo de expresión o gramática, explícalo brevemente en español. Si no, null.",
   "stars": null o número (1-5),
-  "summaryAdvice": "Consejo breve solo si se completaron las 3 misiones, de lo contrario null"
+  "summaryAdvice": "Consejo breve en español solo si se completaron las 3 misiones, de lo contrario null"
 }`;
 
-    const formattedHistory = history.map((msg) => ({
-      role: msg.sender === "ai" ? "assistant" : "user",
-      content: msg.text,
-    }));
+    const formattedHistory = (Array.isArray(history) ? history : [])
+      .slice(-MAX_HISTORY)
+      .map((msg) => ({
+        role: msg.sender === "ai" ? "assistant" : "user",
+        content: String(msg.text ?? "").slice(0, MAX_MESSAGE_LENGTH),
+      }));
 
-    const messages = [
-      { role: "system", content: systemPrompt },
-      ...formattedHistory,
-    ];
+    const messages = [{ role: "system", content: systemPrompt }, ...formattedHistory];
 
     if (userMessage && userMessage.trim() !== "") {
-      messages.push({ role: "user", content: userMessage });
+      messages.push({ role: "user", content: userMessage.slice(0, MAX_MESSAGE_LENGTH) });
     } else {
-      messages.push({
-        role: "user",
-        content: "Salúdame e inicia la escena."
-      });
+      messages.push({ role: "user", content: "Salúdame e inicia la escena." });
     }
 
     const completion = await groq.chat.completions.create({
@@ -107,17 +77,9 @@ FORMATO DE RESPUESTA JSON OBLIGATORIO:
     const data = JSON.parse(completion.choices[0].message.content);
 
     // Fusión segura: nunca desmarcar lo que ya estaba completado
-    const mergedMissions = [
-      currentMissionsState[0] || (data.completedMissions ? data.completedMissions[0] : false),
-      currentMissionsState[1] || (data.completedMissions ? data.completedMissions[1] : false),
-      currentMissionsState[2] || (data.completedMissions ? data.completedMissions[2] : false),
-    ];
+    const completedMissions = done.map((d, i) => d || data.completedMissions?.[i] === true);
 
-    return Response.json({
-      ...data,
-      completedMissions: mergedMissions,
-      missionsList: scenarioData.missions
-    });
+    return Response.json({ ...data, completedMissions });
 
   } catch (error) {
     console.error("Error en la API de Roleplay:", error);

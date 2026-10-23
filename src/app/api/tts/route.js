@@ -1,4 +1,9 @@
+import { requireUser } from "@/lib/requireUser";
+
 export async function POST(request) {
+  const { unauthorized } = await requireUser();
+  if (unauthorized) return unauthorized;
+
   try {
     const { text, voiceId = "MmLmgmAm7pKFUJBu1Lov" } = await request.json();
 

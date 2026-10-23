@@ -2,24 +2,18 @@
 
 import { useState, useEffect, useRef } from 'react';
 
-const SCENARIO_NAMES = [
-  "🥖 Boulangerie & Cafés",
-  "🎄 Cenas y Navidad",
-  "👶 En el parque con Mai",
-  "🚇 Metro y Transporte"
-];
-
-export default function RoleplayModal({ isOpen, onClose }) {
-  const [activeScenario, setActiveScenario] = useState(SCENARIO_NAMES[0]);
+export default function RoleplayModal({ isOpen, onClose, scenarios, lang }) {
+  const [activeScenario, setActiveScenario] = useState(0);
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [listening, setListening] = useState(false);
   
   // Estado de Misiones y Gamificación
-  const [missions, setMissions] = useState([]);
   const [completedMissions, setCompletedMissions] = useState([false, false, false]);
-  const [showSummary, setShowSummary] = useState(false);
+
+  // Ayuda para misiones: { missionIndex, tip, phrases, words } | { missionIndex, loading } | { missionIndex, error }
+  const [hint, setHint] = useState(null);
 
   const messagesEndRef = useRef(null);
 
@@ -33,43 +27,49 @@ export default function RoleplayModal({ isOpen, onClose }) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
-  const hablarFrances = (text) => {
+  // Cuando se cumple la misión de la ayuda abierta, la cerramos.
+  useEffect(() => {
+    if (hint && completedMissions[hint.missionIndex]) setHint(null);
+  }, [completedMissions, hint]);
+
+  const missions = scenarios[activeScenario]?.missions ?? [];
+
+  const hablar = (text) => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'fr-FR';
+      utterance.lang = lang.speech;
       utterance.rate = 0.9;
       window.speechSynthesis.speak(utterance);
     }
   };
 
-  const iniciarEscenario = async (scenarioName) => {
+  const iniciarEscenario = async (scenarioIndex) => {
     setMessages([]);
     setLoading(true);
-    setShowSummary(false);
     setCompletedMissions([false, false, false]);
+    setHint(null);
 
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scenario: scenarioName, history: [], userMessage: "" })
+        body: JSON.stringify({ scenarioIndex, history: [], userMessage: "" })
       });
 
       const data = await res.json();
 
-      if (data.replyFr) {
-        setMissions(data.missionsList || []);
+      if (data.reply) {
         if (data.completedMissions) setCompletedMissions(data.completedMissions);
 
         const initialMsg = {
           sender: 'ai',
-          text: data.replyFr,
-          translation: data.translationEs,
+          text: data.reply,
+          translation: data.translation,
           feedback: null
         };
         setMessages([initialMsg]);
-        hablarFrances(data.replyFr);
+        hablar(data.reply);
       }
     } catch (err) {
       console.error("Error al iniciar escenario:", err);
@@ -93,32 +93,57 @@ export default function RoleplayModal({ isOpen, onClose }) {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        // El historial va sin el mensaje nuevo (el servidor lo añade a partir de userMessage)
+        // y enviamos qué misiones ya están cumplidas para que no se pierdan.
         body: JSON.stringify({
-          scenario: activeScenario,
-          history: newHistory,
-          userMessage: textToSend
+          scenarioIndex: activeScenario,
+          history: messages,
+          userMessage: textToSend,
+          currentMissionsState: completedMissions
         })
       });
 
       const data = await res.json();
 
-      if (data.replyFr) {
+      if (data.reply) {
         if (data.completedMissions) setCompletedMissions(data.completedMissions);
 
         const aiMsg = {
           sender: 'ai',
-          text: data.replyFr,
-          translation: data.translationEs,
+          text: data.reply,
+          translation: data.translation,
           feedback: data.feedback
         };
         setMessages((prev) => [...prev, aiMsg]);
-        hablarFrances(data.replyFr);
+        hablar(data.reply);
       }
     } catch (err) {
       console.error("Error al enviar mensaje:", err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const pedirAyuda = async (missionIndex) => {
+    setHint({ missionIndex, loading: true });
+    try {
+      const res = await fetch('/api/hint', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scenarioIndex: activeScenario, missionIndex, history: messages })
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error);
+      setHint({ missionIndex, ...data });
+    } catch (err) {
+      console.error("Error al pedir ayuda:", err);
+      setHint({ missionIndex, error: "No se pudo cargar la ayuda. Inténtalo de nuevo." });
+    }
+  };
+
+  const usarFrase = (text) => {
+    setInputMessage(text);
+    hablar(text);
   };
 
   const startListening = () => {
@@ -129,7 +154,7 @@ export default function RoleplayModal({ isOpen, onClose }) {
     }
 
     const recognition = new SpeechRecognition();
-    recognition.lang = 'fr-FR';
+    recognition.lang = lang.speech;
     setListening(true);
 
     recognition.onresult = (event) => {
@@ -154,7 +179,7 @@ export default function RoleplayModal({ isOpen, onClose }) {
         {/* Header Modal */}
         <div className="bg-white px-4 py-3 border-b border-slate-200 flex justify-between items-center">
           <div>
-            <h3 className="font-bold text-slate-800 text-sm">Roleplay de Inmersión A2</h3>
+            <h3 className="font-bold text-slate-800 text-sm">Roleplay de Inmersión</h3>
             <p className="text-[10px] font-semibold text-sky-600">Misiones Activas: {totalCompleted} / 3 completadas</p>
           </div>
           <button 
@@ -166,17 +191,17 @@ export default function RoleplayModal({ isOpen, onClose }) {
 
         {/* Selector de Escenarios */}
         <div className="flex gap-2 p-2 bg-slate-100 border-b border-slate-200 overflow-x-auto no-scrollbar">
-          {SCENARIO_NAMES.map((sc, i) => (
+          {scenarios.map((sc, i) => (
             <button
               key={i}
               disabled={loading}
-              onClick={() => setActiveScenario(sc)}
+              onClick={() => setActiveScenario(i)}
               className={`px-3 py-1.5 rounded-full text-[11px] font-semibold whitespace-nowrap transition ${
-                activeScenario === sc
+                activeScenario === i
                   ? 'bg-slate-900 text-white shadow-sm'
                   : 'bg-white text-slate-600 hover:bg-slate-200 border border-slate-200'
               }`}>
-              {sc}
+              {sc.name}
             </button>
           ))}
         </div>
@@ -194,9 +219,22 @@ export default function RoleplayModal({ isOpen, onClose }) {
                 }`}>
                   {completedMissions[idx] ? '✓' : idx + 1}
                 </span>
-                <span className={completedMissions[idx] ? 'line-through text-slate-400 font-medium' : 'text-slate-700 font-medium'}>
+                <span className={`flex-1 ${completedMissions[idx] ? 'line-through text-slate-400 font-medium' : 'text-slate-700 font-medium'}`}>
                   {m}
                 </span>
+                {!completedMissions[idx] && (
+                  <button
+                    onClick={() => pedirAyuda(idx)}
+                    disabled={hint?.loading}
+                    title="Pedir ayuda para esta misión"
+                    className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-semibold border transition disabled:opacity-50 ${
+                      hint?.missionIndex === idx
+                        ? 'bg-amber-400 text-amber-950 border-amber-400'
+                        : 'bg-white text-amber-700 border-amber-200 hover:bg-amber-50'
+                    }`}>
+                    💡 Ayuda
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -230,7 +268,7 @@ export default function RoleplayModal({ isOpen, onClose }) {
 
                   {isAi && (
                     <button 
-                      onClick={() => hablarFrances(msg.text)}
+                      onClick={() => hablar(msg.text)}
                       className="absolute -right-7 top-1.5 text-xs p-1 opacity-70 hover:opacity-100">
                       🔊
                     </button>
@@ -247,6 +285,55 @@ export default function RoleplayModal({ isOpen, onClose }) {
           )}
           <div ref={messagesEndRef} />
         </div>
+
+        {/* Panel de ayuda para la misión */}
+        {hint && (
+          <div className="bg-amber-50 border-t border-amber-200 px-3 py-2.5 max-h-[40%] overflow-y-auto flex flex-col gap-2">
+            <div className="flex justify-between items-start gap-2">
+              <p className="text-[11px] font-bold text-amber-900">
+                💡 Ayuda: <span className="font-medium">{missions[hint.missionIndex]}</span>
+              </p>
+              <button onClick={() => setHint(null)} className="text-amber-700 hover:text-amber-900 text-xs font-bold px-1">✕</button>
+            </div>
+
+            {hint.loading && <p className="text-[11px] text-amber-700 animate-pulse">Buscando expresiones útiles…</p>}
+            {hint.error && <p className="text-[11px] text-rose-700">{hint.error}</p>}
+
+            {hint.tip && <p className="text-[11px] text-amber-900">{hint.tip}</p>}
+
+            {hint.phrases?.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-amber-700">Expresiones (toca para usarla)</span>
+                {hint.phrases.map((p, i) => (
+                  <button
+                    key={i}
+                    onClick={() => usarFrase(p.text)}
+                    className="text-left bg-white border border-amber-200 hover:border-amber-400 rounded-xl px-2.5 py-1.5 transition">
+                    <span className="block text-xs font-semibold text-slate-800">{p.text}</span>
+                    <span className="block text-[10px] text-slate-500">{p.translation}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {hint.words?.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-amber-700">Palabras clave</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {hint.words.map((w, i) => (
+                    <button
+                      key={i}
+                      onClick={() => hablar(w.text)}
+                      className="bg-white border border-amber-200 hover:border-amber-400 rounded-full px-2.5 py-1 text-[11px] transition">
+                      <span className="font-semibold text-slate-800">{w.text}</span>
+                      <span className="text-slate-500"> · {w.translation}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Input Bar */}
         <div className="p-3 bg-white border-t border-slate-200 flex items-center gap-2">
@@ -267,7 +354,7 @@ export default function RoleplayModal({ isOpen, onClose }) {
             onChange={(e) => setInputMessage(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
             disabled={loading}
-            placeholder={listening ? "Escuchando..." : "Responde en francés..."}
+            placeholder={listening ? "Escuchando..." : `Responde en ${lang.name.toLowerCase()}...`}
             className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:border-sky-500 focus:bg-white transition disabled:opacity-50"
           />
 

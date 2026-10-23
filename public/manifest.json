@@ -1,7 +1,7 @@
 {
-  "name": "París - Francés en Familia",
-  "short_name": "París",
-  "description": "Aplicación de aprendizaje de francés para el viaje a París",
+  "name": "TravelLingo",
+  "short_name": "TravelLingo",
+  "description": "Aprende el idioma que necesitas para tu viaje",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f8fafc",
