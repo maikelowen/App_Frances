@@ -1,20 +1,19 @@
 import { requireUser, missingProfile } from "@/lib/requireUser";
 import { LANGUAGES } from "@/lib/languages";
-import Groq from "groq-sdk";
-
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+import { groq, MODEL } from "@/lib/ai";
+import { noPlaceholdersRule, romanizationRule, studentBlock } from "@/lib/prompting";
 
 const clean = (value, max) => (typeof value === "string" ? value.trim().slice(0, max) : "");
 const cleanPairs = (list, max) =>
   (Array.isArray(list) ? list : [])
-    .map((x) => ({ text: clean(x?.text, 200), translation: clean(x?.translation, 200) }))
+    .map((x) => ({ text: clean(x?.text, 200), romanization: clean(x?.romanization, 200), translation: clean(x?.translation, 200) }))
     .filter((x) => x.text && x.translation)
     .slice(0, max);
 
 // Ayuda para completar una misión del roleplay: vocabulario y expresiones útiles
 // según el punto en el que va la conversación.
 export async function POST(request) {
-  const { profile, unauthorized } = await requireUser();
+  const { user, profile, unauthorized } = await requireUser();
   if (unauthorized) return unauthorized;
   if (!profile) return missingProfile();
 
@@ -30,7 +29,12 @@ export async function POST(request) {
       .map((m) => `${m.sender === "ai" ? "Personaje" : "Estudiante"}: ${String(m.text ?? "").slice(0, 500)}`)
       .join("\n");
 
+    const roman = lang.romanization ? ` "romanization": "transcripción en ${lang.romanization}",` : "";
+
     const prompt = `Eres un profesor de ${lang.name} que ayuda a un estudiante hispanohablante de nivel ${profile.level} durante un roleplay.
+
+ESTUDIANTE:
+${studentBlock(profile, user.firstName)}
 
 ESCENA: ${scenario.name}. Habla con: ${scenario.role}
 MISIÓN QUE QUIERE CUMPLIR: "${mission}"
@@ -41,14 +45,16 @@ Dale ayuda para cumplir la misión en su próximo mensaje, adecuada al nivel ${p
 Responde ÚNICAMENTE con un objeto JSON:
 {
   "tip": "Consejo breve en español (1-2 frases) sobre cómo abordar la misión ahora",
-  "phrases": [{ "text": "expresión completa en ${lang.name}", "translation": "traducción al español" }],
-  "words": [{ "text": "palabra clave en ${lang.name}", "translation": "traducción al español" }]
+  "phrases": [{ "text": "expresión completa en ${lang.name}",${roman} "translation": "traducción al español" }],
+  "words": [{ "text": "palabra clave en ${lang.name}",${roman} "translation": "traducción al español" }]
 }
 Incluye 3 expresiones distintas (de más sencilla a más elaborada, pero ninguna por encima del nivel ${profile.level}) y entre 3 y 5 palabras clave.
-Todo lo que esté en ${lang.name} debe ser gramaticalmente correcto y natural.`;
+Todo lo que esté en ${lang.name} debe ser gramaticalmente correcto y natural.
+${noPlaceholdersRule(profile, user.firstName)}
+${romanizationRule(lang)}`;
 
     const completion = await groq.chat.completions.create({
-      model: "openai/gpt-oss-20b",
+      model: MODEL,
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
       max_completion_tokens: 3000,

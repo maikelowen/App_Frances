@@ -1,42 +1,158 @@
 @import "tailwindcss";
 
+/*
+  Sistema visual de TravelLingo: el mundo del viaje.
+  Tinta azul de pasaporte, amarillo de señalética de aeropuerto para la acción principal
+  y sellos para lo conseguido. Los colores se usan siempre a través de estos tokens.
+*/
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --paper: #eceff3;
+  --surface: #ffffff;
+  --ink: #15213b;
+  --muted: #5a6479;
+  --line: #d3d9e3;
+  --signal: #f2b705;
+  --signal-ink: #15213b;
+  --stamp: #1d7a4c;
+  --stamp-soft: #e3f1ea;
+  --miss: #b3261e;
+  --miss-soft: #f8e5e3;
+  --warn: #8a5a00;
+  --warn-soft: #fbf0d6;
+  --bubble-me: #15213b;
+  --bubble-me-ink: #ffffff;
+  --board: #15213b;
+  --board-ink: #eceff3;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    color-scheme: dark;
+    --paper: #0e1524;
+    --surface: #172036;
+    --ink: #e7ebf3;
+    --muted: #9aa4ba;
+    --line: #2a3550;
+    --signal: #f5c230;
+    --signal-ink: #15213b;
+    --stamp: #5cc795;
+    --stamp-soft: #17352a;
+    --miss: #f0857d;
+    --miss-soft: #3a1d1e;
+    --warn: #f3c86a;
+    --warn-soft: #3a2f17;
+    --bubble-me: #f5c230;
+    --bubble-me-ink: #15213b;
+    --board: #070b14;
+    --board-ink: #e7ebf3;
   }
 }
 
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-signal: var(--signal);
+  --color-signal-ink: var(--signal-ink);
+  --color-stamp: var(--stamp);
+  --color-stamp-soft: var(--stamp-soft);
+  --color-miss: var(--miss);
+  --color-miss-soft: var(--miss-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bubble-me: var(--bubble-me);
+  --color-bubble-me-ink: var(--bubble-me-ink);
+  --color-board: var(--board);
+  --color-board-ink: var(--board-ink);
+
+  --font-display: var(--font-archivo), "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --font-sans: var(--font-atkinson), "Segoe UI", system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+
+html, body { height: 100%; }
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* Optimizaciones de scroll táctil para Android / PWA */
-.no-scrollbar {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
-  -webkit-overflow-scrolling: touch; /* Scroll suave e inercia en móviles */
-  scroll-snap-type: x mandatory; /* Encaje magnético de los chips */
+h1, h2, h3 { text-wrap: balance; }
+
+:focus-visible { outline: 3px solid var(--signal); outline-offset: 2px; border-radius: 6px; }
+
+@layer components {
+  /* Titulares estrechos, al estilo de la señalética */
+  .display { font-family: var(--font-display); font-stretch: 80%; font-weight: 800; line-height: 1; letter-spacing: -0.01em; }
+  .display-md { font-family: var(--font-display); font-stretch: 88%; font-weight: 700; line-height: 1.12; }
+
+  /* Etiquetas tipo billete: mono, mayúsculas, espaciadas */
+  .tag { font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+    min-height: 3.25rem; padding: 0 1.25rem; border-radius: 14px;
+    font-family: var(--font-display); font-stretch: 92%; font-weight: 700; font-size: 1rem;
+    transition: transform .12s ease, background-color .15s ease, opacity .15s ease;
+  }
+  .btn:active:not(:disabled) { transform: scale(0.97); }
+  .btn:disabled { opacity: 0.45; }
+  .btn-signal { background: var(--signal); color: var(--signal-ink); }
+  .btn-ink { background: var(--ink); color: var(--paper); }
+  .btn-ghost { background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+  .btn-icon { min-height: 3.25rem; width: 3.25rem; padding: 0; }
+  .btn-sm { min-height: 2.5rem; padding: 0 0.9rem; font-size: 0.9rem; border-radius: 10px; }
+
+  .input {
+    width: 100%; min-height: 3rem; padding: 0.7rem 0.9rem; border-radius: 12px;
+    background: var(--surface); color: var(--ink); border: 1px solid var(--line); font-size: 1rem;
+  }
+  .input::placeholder { color: var(--muted); }
+  .input:focus { outline: none; border-color: var(--ink); }
+
+  .chip {
+    flex-shrink: 0; display: inline-flex; align-items: center; min-height: 2.5rem; padding: 0 0.9rem;
+    border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-size: 0.9rem;
+  }
+  .chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+
+  /* Billete: cuerpo + talón con perforación */
+  .ticket { background: var(--surface); border-radius: 18px; position: relative; }
+  .ticket-stub { border-top: 2px dashed var(--line); position: relative; }
+  .ticket-stub::before, .ticket-stub::after {
+    content: ""; position: absolute; top: -10px; width: 18px; height: 18px; border-radius: 50%; background: var(--paper);
+  }
+  .ticket-stub::before { left: -9px; }
+  .ticket-stub::after { right: -9px; }
+
+  /* Sello de pasaporte */
+  .stamp {
+    font-family: var(--font-mono); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+    border: 3px double var(--stamp); color: var(--stamp); background: var(--stamp-soft);
+    border-radius: 10px; transform: rotate(-4deg);
+  }
+  .stamp-mini {
+    display: inline-block; font-family: var(--font-mono); font-size: 0.65rem; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; border: 2px solid currentColor; border-radius: 4px; padding: 0 0.35rem; transform: rotate(-6deg);
+  }
 }
 
-.no-scrollbar::-webkit-scrollbar {
-  display: none; /* Chrome, Safari and Opera */
+@media (prefers-reduced-motion: no-preference) {
+  .stamp-in { animation: stamp-in .55s cubic-bezier(.2, 1.6, .4, 1) both; }
+  @keyframes stamp-in {
+    from { transform: rotate(-4deg) scale(1.5); opacity: 0; }
+    to { transform: rotate(-4deg) scale(1); opacity: 1; }
+  }
+  .rise { animation: rise .35s ease-out both; }
+  @keyframes rise { from { transform: translateY(8px); opacity: 0.4; } to { transform: none; opacity: 1; } }
 }
 
-.chip-item {
-  scroll-snap-align: start;
-}
+/* Scroll horizontal táctil sin barra (carruseles de chips) */
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

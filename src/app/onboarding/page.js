@@ -15,7 +15,16 @@ export default async function OnboardingPage() {
   return (
     <OnboardingForm
       firstName={user.firstName}
-      initial={profile ? { language: profile.language, level: profile.level, goal: profile.goal, context: profile.context } : null}
+      initial={profile ? {
+        name: profile.name ?? user.firstName ?? "",
+        companions: profile.companions ?? [],
+        language: profile.language,
+        level: profile.level,
+        goal: profile.goal,
+        context: profile.context,
+        tripDate: profile.tripDate ?? "",
+        dailyMinutes: profile.dailyMinutes ?? 10,
+      } : null}
     />
   );
 }

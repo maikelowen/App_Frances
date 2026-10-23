@@ -4,8 +4,8 @@
   "description": "Aprende el idioma que necesitas para tu viaje",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f8fafc",
-  "theme_color": "#0284c7",
+  "background_color": "#eceff3",
+  "theme_color": "#15213b",
   "icons": [
     {
       "src": "/icon.jpg",

@@ -1,7 +1,6 @@
-import Groq from "groq-sdk";
+import { groq, MODEL } from "./ai";
+import { noPlaceholdersRule, studentBlock } from "./prompting";
 import { LANGUAGES } from "./languages";
-
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 const CATEGORY_COUNT = 6;
 const SCENARIO_COUNT = 4;
@@ -55,12 +54,12 @@ function sanitizePlan(data) {
     .filter((s) => s.name && s.role && s.missions.length === 3)
     .slice(0, SCENARIO_COUNT);
 
-  return { categories, scenarios };
+  return { title: clean(data?.title, 40), categories, scenarios };
 }
 
 // Genera las categorías de tarjetas y los escenarios de roleplay a partir del perfil.
 // Si la IA falla, devuelve un plan genérico para que el onboarding nunca se bloquee.
-export async function generatePlan({ language, level, goal, context }) {
+export async function generatePlan({ language, level, goal, context, name, companions }) {
   const lang = LANGUAGES[language];
 
   const prompt = `Eres un diseñador de cursos de idiomas. Crea un plan de práctica personalizado.
@@ -68,13 +67,15 @@ export async function generatePlan({ language, level, goal, context }) {
 ESTUDIANTE (hispanohablante):
 - Idioma que aprende: ${lang.name}
 - Nivel: ${level}
-- Objetivo: ${goal}
-- Contexto: ${context || "(sin más contexto)"}
+${studentBlock({ goal, context, name, companions })}
 
 Las categorías y los escenarios deben reflejar situaciones ESPECÍFICAS de su objetivo y contexto
 (las personas, lugares y momentos que menciona), no temas turísticos genéricos.
 
+${noPlaceholdersRule({ name, companions })}
+
 Genera ÚNICAMENTE un objeto JSON con:
+- "title": nombre corto en español de su viaje u objetivo, máximo 30 caracteres, sin emoji (ej. "Navidad en París", "Entrevista en Berlín").
 - "categories": EXACTAMENTE ${CATEGORY_COUNT} categorías de frases útiles para su objetivo y contexto concreto. Cada una en español, empieza por un emoji y tiene como máximo 30 caracteres (ej. "🎄 Cenas y brindis").
 - "scenarios": EXACTAMENTE ${SCENARIO_COUNT} escenarios de conversación realistas que vivirá. Cada uno con:
   - "name": título en español, empieza por un emoji, máximo 30 caracteres.
@@ -83,6 +84,7 @@ Genera ÚNICAMENTE un objeto JSON con:
 
 Formato:
 {
+  "title": "...",
   "categories": ["..."],
   "scenarios": [{ "name": "...", "role": "...", "missions": ["...", "...", "..."] }]
 }`;
@@ -92,7 +94,7 @@ Formato:
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const completion = await groq.chat.completions.create({
-        model: "openai/gpt-oss-20b",
+        model: MODEL,
         messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
         // "medium" da planes mucho más relevantes que "low" (~5 s). El límite de tokens
@@ -110,6 +112,7 @@ Formato:
 
   // Si la IA no dio suficiente contenido, completamos con el plan genérico.
   return {
+    title: best?.title || clean(goal, 40),
     categories: best?.categories.length >= 3 ? best.categories : FALLBACK_CATEGORIES,
     scenarios: best?.scenarios.length >= 1 ? best.scenarios : FALLBACK_SCENARIOS,
   };
